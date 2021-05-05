@@ -1,0 +1,342 @@
+<html>
+<head>
+    <title>CSCI-510: Assn 6 - Materials and Shading</title>
+    
+    <!-- vertex Shader -->
+    <script id="sphereMap-V"  type="x-shader/x-vertex">
+    #version 300 es
+    precision mediump float;
+    // Vertex shader for phong illumination model
+    // Per vertex shading
+
+    // Vertex Attributes
+    in vec3 aVertexPosition; // in model coords
+    in vec2 aUV;    // u-v coordinates
+
+    // outputs
+    out vec2 theUV;  // pass uv's onto the fragment shader
+    
+    // for object rotation
+    uniform vec3 theta;
+      
+      
+    void main()
+    {
+        // Compute the sines and cosines of each rotation
+        // about each axis
+        vec3 angles = radians( theta );
+        vec3 c = cos( angles );
+        vec3 s = sin( angles );
+
+        // rotation matrices
+        mat4 rx = mat4 ( 1.0,  0.0,  0.0,  0.0,
+                         0.0,  c.x,  s.x,  0.0,
+                         0.0, -s.x,  c.x,  0.0,
+                         0.0,  0.0,  0.0,  1.0 );
+
+        mat4 ry = mat4 ( c.y,  0.0, -s.y,  0.0,
+                         0.0,  1.0,  0.0,  0.0,
+                         s.y,  0.0,  c.y,  0.0,
+                         0.0,  0.0,  0.0,  1.0 );
+
+         mat4 rz = mat4 ( c.z,  s.z,  0.0,  0.0,
+                         -s.z,  c.z,  0.0,  0.0,
+                         0.0,  0.0,  1.0,  0.0,
+                         0.0,  0.0,  0.0,  1.0 );
+                         
+        // pass uvs to fragment shader
+        theUV = aUV;
+
+        // transform vertex to clip space
+        gl_Position = rz * ry * rx * vec4 (aVertexPosition, 1.0);
+    }
+
+    </script>
+
+
+     <!-- fragment Shader -->
+     <script id="sphereMap-F" type="x-shader/x-fragment">
+		#version 300 es
+		//=============================================================================================================
+		//Referrenced Library
+		//=========================================================================
+		// Source: https://raw.githubusercontent.com/ashima/webgl-noise/master/src/classicnoise2D.glsl
+		//
+		// GLSL textureless classic 2D noise "cnoise",
+		// with an RSL-style periodic variant "pnoise".
+		// Author:  Stefan Gustavson (stefan.gustavson@liu.se)
+		// Version: 2011-08-22
+		//
+		// Many thanks to Ian McEwan of Ashima Arts for the
+		// ideas for permutation and gradient selection.
+		//
+		// Copyright (c) 2011 Stefan Gustavson. All rights reserved.
+		// Distributed under the MIT license. See LICENSE file.
+		// https://github.com/ashima/webgl-noise
+		//
+
+		precision mediump int;
+		precision mediump float;
+
+		vec4 mod289(vec4 x)
+		{
+		return x - floor(x * (1.0 / 289.0)) * 289.0;
+		}
+
+		vec4 permute(vec4 x)
+		{
+		return mod289(((x*34.0)+1.0)*x);
+		}
+
+		vec4 taylorInvSqrt(vec4 r)
+		{
+		return 1.79284291400159 - 0.85373472095314 * r;
+		}
+
+		vec2 fade(vec2 t) {
+		return t*t*t*(t*(t*6.0-15.0)+10.0);
+		}
+
+		// Classic Perlin noise
+		float cnoise(vec2 P)
+		{
+		vec4 Pi = floor(P.xyxy) + vec4(0.0, 0.0, 1.0, 1.0);
+		vec4 Pf = fract(P.xyxy) - vec4(0.0, 0.0, 1.0, 1.0);
+		Pi = mod289(Pi); // To avoid truncation effects in permutation
+		vec4 ix = Pi.xzxz;
+		vec4 iy = Pi.yyww;
+		vec4 fx = Pf.xzxz;
+		vec4 fy = Pf.yyww;
+
+		vec4 i = permute(permute(ix) + iy);
+
+		vec4 gx = fract(i * (1.0 / 41.0)) * 2.0 - 1.0 ;
+		vec4 gy = abs(gx) - 0.5 ;
+		vec4 tx = floor(gx + 0.5);
+		gx = gx - tx;
+
+		vec2 g00 = vec2(gx.x,gy.x);
+		vec2 g10 = vec2(gx.y,gy.y);
+		vec2 g01 = vec2(gx.z,gy.z);
+		vec2 g11 = vec2(gx.w,gy.w);
+
+		vec4 norm = taylorInvSqrt(vec4(dot(g00, g00), dot(g01, g01), dot(g10, g10), dot(g11, g11)));
+		g00 *= norm.x;
+		g01 *= norm.y;
+		g10 *= norm.z;
+		g11 *= norm.w;
+
+		float n00 = dot(g00, vec2(fx.x, fy.x));
+		float n10 = dot(g10, vec2(fx.y, fy.y));
+		float n01 = dot(g01, vec2(fx.z, fy.z));
+		float n11 = dot(g11, vec2(fx.w, fy.w));
+
+		vec2 fade_xy = fade(Pf.xy);
+		vec2 n_x = mix(vec2(n00, n01), vec2(n10, n11), fade_xy.x);
+		float n_xy = mix(n_x.x, n_x.y, fade_xy.y);
+		return 2.3 * n_xy;
+		}
+
+		// Classic Perlin noise, periodic variant
+		float pnoise(vec2 P, vec2 rep)
+		{
+		vec4 Pi = floor(P.xyxy) + vec4(0.0, 0.0, 1.0, 1.0);
+		vec4 Pf = fract(P.xyxy) - vec4(0.0, 0.0, 1.0, 1.0);
+		Pi = mod(Pi, rep.xyxy); // To create noise with explicit period
+		Pi = mod289(Pi);        // To avoid truncation effects in permutation
+		vec4 ix = Pi.xzxz;
+		vec4 iy = Pi.yyww;
+		vec4 fx = Pf.xzxz;
+		vec4 fy = Pf.yyww;
+
+		vec4 i = permute(permute(ix) + iy);
+
+		vec4 gx = fract(i * (1.0 / 41.0)) * 2.0 - 1.0 ;
+		vec4 gy = abs(gx) - 0.5 ;
+		vec4 tx = floor(gx + 0.5);
+		gx = gx - tx;
+
+		vec2 g00 = vec2(gx.x,gy.x);
+		vec2 g10 = vec2(gx.y,gy.y);
+		vec2 g01 = vec2(gx.z,gy.z);
+		vec2 g11 = vec2(gx.w,gy.w);
+
+		vec4 norm = taylorInvSqrt(vec4(dot(g00, g00), dot(g01, g01), dot(g10, g10), dot(g11, g11)));
+		g00 *= norm.x;
+		g01 *= norm.y;
+		g10 *= norm.z;
+		g11 *= norm.w;
+
+		float n00 = dot(g00, vec2(fx.x, fy.x));
+		float n10 = dot(g10, vec2(fx.y, fy.y));
+		float n01 = dot(g01, vec2(fx.z, fy.z));
+		float n11 = dot(g11, vec2(fx.w, fy.w));
+
+		vec2 fade_xy = fade(Pf.xy);
+		vec2 n_x = mix(vec2(n00, n01), vec2(n10, n11), fade_xy.x);
+		float n_xy = mix(n_x.x, n_x.y, fade_xy.y);
+		return 2.3 * n_xy;
+		}
+
+		//=============================================================================================================
+		// Referrenced Library End
+
+		// Fragment shader for phong illumination model
+		// Per vertex shading
+
+		precision lowp float;
+			
+		// uvs passed in from vertex shader
+		in vec2 theUV;
+		
+		// the texture to use
+		uniform sampler2D theTexture;
+
+		uniform int isProc;
+		
+
+		// Color that is the result of this shader
+		out vec4 fragColor;
+
+		vec3 bricks(vec2 theUV){
+			vec3 color;
+
+			vec3 brick_red = vec3(1.0, 0.25, 0.25);
+			vec3 brick_white = vec3(0.75, 0.75, 0.75);
+
+			theUV = theUV * 50.0;
+
+			float s = theUV[0];
+			float t = theUV[1];
+
+			float sc = mod(s, 5.0);
+			float tc = mod(t, 3.0);
+
+			if (mod(floor(t / 3.0), 2.0) != 0.0){
+				sc += 2.5;
+			}
+
+			if((sc > 4.0 && sc < 5.0) || (tc > 2.0 && tc < 3.0)){
+				return brick_white + 0.2 * pnoise(10.0 * theUV, vec2(0.0, 0.0));
+			}
+			else{
+				return brick_red + 0.2 * (pnoise(theUV, vec2(0.0, 0.0)));
+			}
+		}
+
+
+			
+
+		void main(void) {
+
+			fragColor = texture (theTexture, theUV);
+
+			if(isProc == 0){
+				fragColor = texture (theTexture, theUV);
+			}else {
+				fragColor = vec4(bricks(theUV), 1.0) ;
+			}
+		}
+
+    </script>
+     
+     <!-- Matrix library and code for standard transformations -->
+     <script type="text/javascript" src="gl-matrix-min.js"></script>
+     
+     <!-- include the shape creation functions -->
+    <script type="text/javascript" src="./cgIShape.js"></script>
+    
+    <!-- definition of standard shapes -->
+    <script type="text/javascript" src="./myShapes-min.js"></script>
+    
+    <!-- include the main tesselation functions -->
+    <script type="text/javascript" src="./textureMain.js"></script>
+    
+    <!-- texture images -->
+    <img id="world-texture" src="1_earth_16k.jpg" style="display: none;"> </img>
+
+	<img id="oldWorld-texture" src = "earth2.jpg" style="display: none;"> </img>
+    
+    <!-- keyboard functions -->
+    <script type="text/javascript">
+      function gotKey (event) {
+      
+      var key = event.key;
+
+      
+      //  change object type
+      if (key == 'c') {
+          nowShowing = 'Cube';
+          angles = cube_angles;
+      }
+      if (key == 's') {
+          nowShowing = 'Sphere';
+          angles = sphere_angles;
+      }
+      
+      // change texture
+      if (key == '1') curTexture = 'globe';
+      if (key == '2') curTexture = 'myimage';
+      if (key == '3') curTexture = 'proc';
+      
+      //  incremental rotation
+      if (key == 'x') angles[0] -= angleInc;
+      if (key == 'y') angles[1] -= angleInc;
+      if (key == 'z') angles[2] -= angleInc;
+      if (key == 'X') angles[0] += angleInc;
+      if (key == 'Y') angles[1] += angleInc;
+      if (key == 'Z') angles[2] += angleInc;
+          
+      draw();
+    }
+    </script>
+    
+  <script type="text/javascript">
+    // Call init once the webpage has loaded
+    window.onload = init;
+  </script>
+</head>
+
+<body>
+  <h1>CSCI-510: Assn 7 - Textures</h1>
+  <table>
+       <tr>
+           <td><canvas id="webgl-canvas" width="500" height="500">
+             Your browser does not support the HTML5 canvas element.
+           </canvas></td>
+           
+           <td>
+               <h3>Controls</h3>
+               
+               <table border="1">
+               <tbody>
+               <tr>
+               <td>x, y, z</td>
+               <td>Rotate the current shape forward about the x, y, or z axis</td>
+               </tr>
+               <tr>
+               <td>X, Y, Z</td>
+               <td>Rotate the current shape backward about the x, y, or z axis</td>
+               </tr>
+               <tr>
+               <td>c</td>
+               <td>Select the cube as the current shape</td>
+               </tr>
+               <tr>
+               <td>s</td>
+               <td>Select the sphere as the current shape</td>
+               </tr>
+               </tbody>
+               </table>
+               
+           </td>
+       </tr>
+   </table>
+  
+
+  
+  
+
+</body>
+</html>
+
